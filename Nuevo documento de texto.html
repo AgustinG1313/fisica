@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Simulación 3D – Bola sobre Rampa y Plano Inclinado</title>
+
+  <!-- Tailwind CSS para estilos -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Inter -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+  <!-- KaTeX para fórmulas matemáticas -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+  <!-- Three.js para simulación 3D -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r152/three.min.js"></script>
+  <!-- OrbitControls para cámara 3D -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r152/examples/js/controls/OrbitControls.min.js"></script>
+  <!-- Chart.js y plugin de zoom/pan para gráficas -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.umd.min.js"></script>
+
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #f3f4f6;
+      color: #1f2937;
+      margin: 0;
+      padding: 0;
+    }
+    .container {
+      max-width: 1400px;
+      margin: 30px auto;
+      padding: 0 16px;
+    }
+    h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #2563eb;
+      margin-bottom: 16px;
+      text-align: center;
+    }
+    .layout {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .sidebar {
+      flex: 1 1 280px;
+      background: #ffffff;
+      border-radius: 8px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+      padding: 24px;
+      max-width: 300px;
+    }
+    .sidebar h2 {
+      font-size: 1.2rem;
+      font-weight: 600;
+      color: #2563eb;
+      margin-bottom: 12px;
+    }
+    .sidebar label {
+      display: block;
+      font-weight: 600;
+      margin-top: 12px;
+      margin-bottom: 4px;
+      color: #374151;
+    }
+    .sidebar input, .sidebar select {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1.5px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 1rem;
+      background-color: #ffffff;
+    }
+    .sidebar .btn {
+      width: 100%;
+      padding: 10px;
+      margin-top: 16px;
+      background-color: #2563eb;
+      color: #ffffff;
+      font-weight: 600;
+      border-radius: 6px;
+      text-align: center;
+      transition: background-color 0.2s;
+    }
+    .sidebar .btn:hover {
+      background-color: #1e40af;
+    }
+    .error-msg {
+      margin-top: 12px;
+      padding: 10px;
+      background-color: #fee2e2;
+      color: #b91c1c;
+      border-radius: 6px;
+      display: none;
+    }
+
+    .main-panel {
+      flex: 3 1 600px;
+      background: #ffffff;
+      border-radius: 8px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .render-area {
+      width: 100%;
+      height: 500px;
+    }
+    .info-panels {
+      display: flex;
+      gap: 12px;
+      padding: 16px;
+      flex-wrap: wrap;
+    }
+    .info-panels .box {
+      background: #e0f2fe;
+      border-radius: 8px;
+      padding: 12px 14px;
+      flex: 1 1 200px;
+      font-size: 0.95rem;
+      color: #0369a1;
+    }
+
+    .tabs {
+      display: flex;
+      border-bottom: 2px solid #e5e7eb;
+      margin-top: 16px;
+    }
+    .tab {
+      padding: 10px 16px;
+      cursor: pointer;
+      font-weight: 600;
+      color: #374151;
+      transition: background-color 0.2s, color 0.2s;
+    }
+    .tab.active {
+      border-bottom: 3px solid #2563eb;
+      color: #2563eb;
+    }
+    .tab:hover {
+      background-color: #f3f4f6;
+    }
+    .tab-content {
+      display: none;
+      padding: 16px;
+    }
+    .tab-content.active {
+      display: block;
+    }
+
+    .accordion {
+      border-radius: 8px;
+      overflow: hidden;
+      margin-top: 16px;
+    }
+    .accordion-header {
+      background: #f9fafb;
+      padding: 12px 16px;
+      font-weight: 600;
+      border-bottom: 1px solid #e5e7eb;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    .accordion-header:hover {
+      background: #e5e7eb;
+    }
+    .accordion-content {
+      display: none;
+      background: #ffffff;
+      padding: 16px 20px;
+    }
+    .accordion.open .accordion-content {
+      display: block;
+    }
+
+    .results-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+    }
+    .results-table th, .results-table td {
+      border: 1px solid #e5e7eb;
+      padding: 8px;
+      text-align: center;
+      font-size: 0.92rem;
+    }
+    .results-table th {
+      background: #2563eb;
+      color: #ffffff;
+      font-weight: 600;
+    }
+
+    .chart-container {
+      margin-top: 24px;
+      background: #ffffff;
+      border-radius: 8px;
+      padding: 16px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+    }
+    .chart-container canvas {
+      width: 100% !important;
+      height: 300px !important;
+    }
+
+    @media (max-width: 1000px) {
+      .layout {
+        flex-direction: column;
+      }
+      .main-panel {
+        height: auto;
+      }
+      .render-area {
+        height: 300px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <h1>Simulación 3D – Bola desde Rampa a Plano Inclinado</h1>
+    <div class="layout">
+      <!-- ================= SIDEBAR CON PARÁMETROS ================= -->
+      <aside class="sidebar">
+        <h2>Parámetros del Experimento</h2>
+
+        <!-- Rampa: altura y largo -->
+        <label for="rampHeight">Altura de la rampa (cm):</label>
+        <input type="number" id="rampHeight" value="30" min="5" step="0.5">
+
+        <label for="rampLength">Longitud de la rampa (cm):</label>
+        <input type="number" id="rampLength" value="50" min="10" step="0.5">
+
+        <label for="rampAngle">Ángulo de la rampa (α, grados):</label>
+        <input type="number" id="rampAngle" value="30" min="5" max="45" step="0.5">
+
+        <!-- Plano: inclinación y tamaño de hoja cuadriculada -->
+        <label for="planeAngle">Inclinación del plano (β, grados):</label>
+        <input type="number" id="planeAngle" value="15" min="0" max="45" step="0.5">
+
+        <label for="gridSize">Tamaño de la hoja cuadriculada (cm):</label>
+        <input type="number" id="gridSize" value="100" min="50" step="5">
+
+        <!-- Número de puntos de estudio -->
+        <label for="numPoints">Número de puntos medidos (4–7):</label>
+        <input type="number" id="numPoints" value="5" min="4" max="7">
+
+        <!-- Botón para iniciar simulación -->
+        <div class="btn" id="btnSimulate">Simular</div>
+
+        <!-- Mensaje de error -->
+        <div class="error-msg" id="errorMsg"></div>
+      </aside>
+
+      <!-- ================= PANEL PRINCIPAL DE SIMULACIÓN Y RESULTADOS ================= -->
+      <div class="main-panel">
+        <!-- Zona de renderizado 3D -->
+        <div id="threeContainer" class="render-area"></div>
+
+        <!-- Panel de información dinámica -->
+        <div class="info-panels">
+          <div class="box" id="infoVelocity">V₀ (cm/s): N/A</div>
+          <div class="box" id="infoImpact">Punto de impacto: N/A</div>
+          <div class="box" id="infoTime">Tiempo total (s): N/A</div>
+        </div>
+
+        <!-- Pestañas para análisis gráfico y analítico -->
+        <div class="tabs">
+          <div class="tab active" data-tab="tabGrafico">Método Gráfico</div>
+          <div class="tab" data-tab="tabAnalitico">Método Analítico</div>
+          <div class="tab" data-tab="tabGraficas">Gráficas</div>
+        </div>
+
+        <!-- Contenido Método Gráfico -->
+        <div id="tabGrafico" class="tab-content active">
+          <div class="accordion" id="accGrafico">
+            <div class="accordion-header" onclick="toggleAccordion('accGrafico')">
+              Puntos Medidos y Resultados
+            </div>
+            <div class="accordion-content">
+              <table class="results-table" id="tableGrafico">
+                <!-- Se llenará dinámicamente -->
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Contenido Método Analítico -->
+        <div id="tabAnalitico" class="tab-content">
+          <div class="accordion" id="accAnalitico">
+            <div class="accordion-header" onclick="toggleAccordion('accAnalitico')">
+              Cálculos Analíticos
+            </div>
+            <div class="accordion-content">
+              <table class="results-table" id="tableAnalitico">
+                <!-- Se llenará dinámicamente -->
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Contenido Gráficas -->
+        <div id="tabGraficas" class="tab-content">
+          <div class="chart-container">
+            <canvas id="chartYt"></canvas>
+          </div>
+          <div class="chart-container">
+            <canvas id="chartVyTime"></canvas>
+          </div>
+          <div class="chart-container">
+            <canvas id="chartYplane"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================= JAVASCRIPT ================================= -->
+  <script>
+    // ---------------------- CONSTANTES Y REFERENCIAS ----------------------
+    const g = 980; // cm/s²
+
+    // Inputs
+    const rampHeightInput = document.getElementById('rampHeight');
+    const rampLengthInput = document.getElementById('rampLength');
+    const rampAngleInput = document.getElementById('rampAngle');
+    const planeAngleInput = document.getElementById('planeAngle');
+    const gridSizeInput = document.getElementById('gridSize');
+    const numPointsInput = document.getElementById('numPoints');
+    const btnSimulate = document.getElementById('btnSimulate');
+    const errorMsg = document.getElementById('errorMsg');
+
+    // Info dinámico
+    const infoVelocity = document.getElementById('infoVelocity');
+    const infoImpact = document.getElementById('infoImpact');
+    const infoTime = document.getElementById('infoTime');
+
+    // Tablas y gráficos
+    const tableGrafico = document.getElementById('tableGrafico');
+    const tableAnalitico = document.getElementById('tableAnalitico');
+    let chartYt, chartVyTime, chartYplane;
+
+    // Tres.js
+    let scene, camera, renderer, controls;
+    let rampMesh, planeMesh, ballMesh;
+    let animationId;
+    let simData = null; // contendrá parámetros y resultados
+
+    // ---------------------- CONFIGURAR ESCENA THREE.JS ----------------------
+    function initThree(container) {
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0xf3f4f6);
+
+      // Cámara
+      const aspect = container.clientWidth / container.clientHeight;
+      camera = new THREE.PerspectiveCamera(50, aspect, 1, 2000);
+      camera.position.set(0, 200, 300);
+
+      // Luz
+      const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1.2);
+      hemiLight.position.set(0, 200, 0);
+      scene.add(hemiLight);
+      const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+      dirLight.position.set(100, 200, 100);
+      scene.add(dirLight);
+
+      // Renderer
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(container.clientWidth, container.clientHeight);
+      container.appendChild(renderer.domElement);
+
+      // Controles Orbit
+      controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.target.set(0, 0, 0);
+      controls.update();
+
+      window.addEventListener('resize', onWindowResize);
+    }
+
+    function onWindowResize() {
+      const container = document.getElementById('threeContainer');
+      camera.aspect = container.clientWidth / container.clientHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(container.clientWidth, container.clientHeight);
+    }
+
+    // ---------------------- CREAR RAMPAS Y PLANO ----------------------
+    function createRampaYPlano(params) {
+      // Limpiar escena
+      while (scene.children.length > 0) {
+        scene.remove(scene.children[0]);
+      }
+      // Luz (re-agregar)
+      const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1.2);
+      hemiLight.position.set(0, 200, 0);
+      scene.add(hemiLight);
+      const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+      dirLight.position.set(100, 200, 100);
+      scene.add(dirLight);
+
+      // Material simple
+      const matRampa = new THREE.MeshStandardMaterial({ color: 0x999999 });
+      const matPlano = new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        side: THREE.DoubleSide,
+        wireframe: false,
+      });
+
+      // GEOMETRÍA DE LA RAMPA: prismático con base rectangular
+      const rampHeight = params.rampHeight;
+      const rampLength = params.rampLength;
+      const rampAngleRad = params.rampAngleRad;
+      const thickness = 2; // grosor de la rampa
+      // La rampa se construye sobre el eje X: largo = rampLength, alto = rampHeight
+      const rampaGeom = new THREE.BoxGeometry(rampLength, thickness, 30);
+      rampMesh = new THREE.Mesh(rampaGeom, matRampa);
+      // Posicionar y rotar la rampa para que su extremo superior esté en origen (0,0,0)
+      rampMesh.position.set(rampLength / 2, rampHeight / 2, 0);
+      rampMesh.rotation.z = -rampAngleRad;
+      scene.add(rampMesh);
+
+      // GEOMETRÍA DEL PLANO INCLINADO: grande para servir de tablero
+      const planeSize = params.gridSize * 1.2; // un poco más grande que la hoja cuadriculada
+      const planoGeom = new THREE.PlaneGeometry(planeSize, planeSize);
+      planeMesh = new THREE.Mesh(planoGeom, matPlano);
+      // Rotar e inclinar el plano
+      const planeAngleRad = params.planeAngleRad;
+      planeMesh.rotation.x = -Math.PI / 2; // primero poner plano horizontal
+      // Luego inclinar alrededor del eje Z
+      planeMesh.rotation.z = planeAngleRad;
+      // Y posicionarlo de modo que su origen (centro) se alinee con la base de la rampa
+      planeMesh.position.set(rampLength * Math.cos(rampAngleRad) + planeSize / 2, 0, 0);
+      scene.add(planeMesh);
+
+      // MALLA DE CUADRICULA: líneas de la hoja cuadriculada
+      const gridHelper = new THREE.GridHelper(params.gridSize, params.gridSize / 10, 0xcccccc, 0xcccccc);
+      gridHelper.rotation.z = planeAngleRad;
+      gridHelper.position.set(rampLength * Math.cos(rampAngleRad), 0.01, 0);
+      scene.add(gridHelper);
+
+      // BOLA
+      const ballGeom = new THREE.SphereGeometry(5, 32, 32);
+      const ballMat = new THREE.MeshStandardMaterial({ color: 0xef4444 });
+      ballMesh = new THREE.Mesh(ballGeom, ballMat);
+      // Partimos la bola en la parte superior de la rampa, justo encima del extremo
+      const x0 = 0;
+      const y0 = rampHeight + 5; // 5 cm de radio
+      const z0 = 0;
+      ballMesh.position.set(x0, y0, z0);
+      scene.add(ballMesh);
+
+      // Mostrar ejes (opcional)
+      const axes = new THREE.AxesHelper(50);
+      scene.add(axes);
+    }
+
+    // ---------------------- CÁLCULOS FÍSICOS 3D ----------------------
+    function calcPhysicalParams() {
+      errorMsg.style.display = 'none';
+
+      // Leer inputs
+      const rampHeight = parseFloat(rampHeightInput.value);
+      const rampLength = parseFloat(rampLengthInput.value);
+      const rampAngle = parseFloat(rampAngleInput.value);
+      const planeAngle = parseFloat(planeAngleInput.value);
+      const gridSize = parseFloat(gridSizeInput.value);
+      const numPoints = parseInt(numPointsInput.value);
+
+      // Validaciones
+      if (
+        isNaN(rampHeight) || rampHeight <= 0 ||
+        isNaN(rampLength) || rampLength <= 0 ||
+        isNaN(rampAngle) || rampAngle <= 0 || rampAngle >= 45 ||
+        isNaN(planeAngle) || planeAngle < 0 || planeAngle >= 45 ||
+        isNaN(gridSize) || gridSize <= 0 ||
+        isNaN(numPoints) || numPoints < 4 || numPoints > 7
+      ) {
+        errorMsg.textContent = "Por favor verifique que todos los parámetros sean válidos: \n- rampHeight>0, rampLength>0\n- 0<rampAngle<45\n- 0≤planeAngle<45\n- gridSize>0\n- 4≤numPoints≤7";
+        errorMsg.style.display = 'block';
+        return null;
+      }
+
+      const rampAngleRad = rampAngle * Math.PI / 180;
+      const planeAngleRad = planeAngle * Math.PI / 180;
+
+      // Cálculo de velocidad al final de la rampa (sin fricción, sin rodadura):
+      // Energía potencial mgh se convierte en energía cinética: V = sqrt(2 g h)
+      const V0 = Math.sqrt(2 * g * rampHeight);
+
+      // Componente horizontal en dirección de la pendiente del plano:
+      // Asumimos que el plano está orientado en la misma dirección horizontal que la rampa (eje X).
+      // Tras la transición, la bola impacta el plano con V0 en dirección del eje X (paralelo a la base de la rampa).
+      const V0x = V0;
+
+      // Determinar punto de impacto con el plano: resolver ecuaciones de movimiento 3D
+      // Ec. de caída en vertical: Y(t) = y0 - 0.5 g t²
+      // Plano se define por la ecuación: z = 0 (eje Z no cambia), y = x * tan(planeAngle)
+      // Pero nuestro sistema: rampa se proyecta sobre el plano XZ: la bola baja verticalmente desde la punta de la rampa hacia el plano inclinado.
+      // Encontrar tiempo de impacto t_impact: la bola deja rampa en posición (x_r, y_r)
+      const x_r = 0;            // En coordenadas del mundo, la punta de la rampa se coloca en x=0
+      const y_r = rampHeight;   // Altura de la punta de la rampa
+      // La bola sale del borde con velocidad V0 en dirección X, pero con componente vertical inicial Vy0 = 0.
+      // En coordenadas del sistema, X avanza, Y desciende por gravedad, y Z permanece en 0.
+      // Ecuaciones paramétricas:
+      // x(t) = x_r + V0x * t
+      // y(t) = y_r - 0.5 g t²
+      // El plano inclinado: la superficie del tablero está definida por la ecuación Y_plane(x) = x * tan(planeAngleRad)
+      // El impacto ocurre cuando y(t) = Y_plane(x(t)).
+      // => y_r - 0.5 g t² = (x_r + V0x t) * tan(planeAngleRad)
+      // Llamemos k = tan(planeAngleRad). Entonces resolver: 0.5 g t² + k V0x t - y_r = 0
+      const k = Math.tan(planeAngleRad);
+      // Coeficientes cuadráticos: a = 0.5 g, b = k V0x, c = -y_r
+      const a = 0.5 * g;
+      const b = k * V0x;
+      const c = -y_r;
+      const discriminant = b * b - 4 * a * c;
+      if (discriminant < 0) {
+        errorMsg.textContent = "No se encuentra intersección con el plano inclinado. Verifique los parámetros.";
+        errorMsg.style.display = 'block';
+        return null;
+      }
+      const t1 = (-b + Math.sqrt(discriminant)) / (2 * a);
+      const t2 = (-b - Math.sqrt(discriminant)) / (2 * a);
+      // Tomar la raíz positiva más pequeña
+      let tImpact = Math.min(t1, t2);
+      if (tImpact < 0) tImpact = Math.max(t1, t2);
+      if (tImpact < 0) {
+        errorMsg.textContent = "No se encuentra un tiempo de impacto válido (negativo).";
+        errorMsg.style.display = 'block';
+        return null;
+      }
+
+      // Coordenadas de impacto
+      const xImpact = x_r + V0x * tImpact;
+      const yImpact = y_r - 0.5 * g * tImpact * tImpact;
+      // Confirmar que yImpact ≈ k * xImpact
+      // Coordenadas en 3D: z=0, X=xImpact, Y=yImpact, Z=0
+      // Pero en la escena Three.js, mapearemos Y-> altura, X-> eje X, Z-> eje Z (0).
+
+      // Puntos de estudio sobre la hoja cuadriculada: se miden a lo largo del plano inclinado desde X=0 hasta X=xImpact
+      const points = [];
+      for (let i = 1; i <= numPoints; i++) {
+        const xi = (i / (numPoints + 1)) * xImpact;
+        const yi = xi * k; // Y en el plano
+        const ti = (xi - x_r) / V0x; // tiempo hasta que la bola se encuentra en esa X
+        points.push({ label: `P${i}`, x: xi, y: yi, t: ti });
+      }
+
+      return {
+        rampHeight,
+        rampLength,
+        rampAngle,
+        rampAngleRad,
+        planeAngle,
+        planeAngleRad,
+        gridSize,
+        numPoints,
+        V0,
+        V0x,
+        tImpact,
+        xImpact,
+        yImpact,
+        points
+      };
+    }
+
+    // ---------------------- RENDERIZAR MESHLAS 3D ----------------------
+    function renderMeshes(params) {
+      // Crear rampa y plano en la escena
+      createRampaYPlano(params);
+
+      // Ajustar cámara para ver todo
+      controls.target.set(params.rampLength / 2, params.rampHeight / 2, 0);
+      controls.update();
+    }
+
+    // ---------------------- ANIMACIÓN DE LA BOLA ----------------------
+    function animateBall(params) {
+      let startTime = null;
+      const rampAngleRad = params.rampAngleRad;
+      const V0x = params.V0x;
+      const tImpact = params.tImpact;
+      const x_r = 0, y_r = params.rampHeight;
+
+      function step(timestamp) {
+        if (!startTime) startTime = timestamp;
+        const elapsed = (timestamp - startTime) / 1000; // en segundos
+        // Si la bola aún está sobre la rampa (antes de llegar al borde)
+        // El tiempo que tarda en deslizar la rampa: tRamp = rampLength / V0x
+        const tRamp = params.rampLength / V0x;
+        let tSim = elapsed;
+        if (elapsed < tRamp) {
+          // Bola sobre rampa: se desliza a velocidad creciente (suponiendo aceleración a_ramp = g sin α)
+          const a_ramp = g * Math.sin(rampAngleRad);
+          const s = 0.5 * a_ramp * elapsed * elapsed; // distancia recorrida a lo largo de la rampa
+          const x_ramp = s * Math.cos(rampAngleRad);
+          const y_ramp = params.rampHeight - s * Math.sin(rampAngleRad);
+          ballMesh.position.set(x_ramp, y_ramp + 5, 0);
+        } else if (elapsed < tRamp + tImpact) {
+          // Bola en caída/proyección después de salir de la rampa
+          const tProj = elapsed - tRamp;
+          // Posición inicial al salir del borde:
+          const x0 = params.rampLength * Math.cos(rampAngleRad);
+          const y0 = params.rampHeight - params.rampLength * Math.sin(rampAngleRad);
+          // Componente inicial de velocidad: V0 horizontal en dirección X; vertical Vy0 = 0 en caída libre
+          const V0x_proj = params.V0x * Math.cos(rampAngleRad);
+          // Proyección en 2D (X vertical Y):
+          const x_actual = x0 + V0x_proj * tProj;
+          const y_actual = y0 - 0.5 * g * tProj * tProj;
+          ballMesh.position.set(x_actual, y_actual + 5, 0);
+        } else {
+          // Bola cayó sobre el plano inclinado; animarla rodando por el plano
+          const tRoll = elapsed - tRamp - tImpact;
+          // Durante el rodamiento en plano ideal inclinación beta: aceleración a_plane = g sin β
+          const a_plane = g * Math.sin(params.planeAngleRad);
+          // Velocidad inicial al impactar: VimpactX, VimpactY
+          const VimpactY = -g * tImpact;
+          const Vimpact_horizontal = params.V0x * Math.cos(rampAngleRad);
+          // Descomponer velocidad sobre el plano:
+          // Componente tangencial en dirección del plano: Vtan = Vimpact_horizontal cos(planeAngle) + VimpactY sin(planeAngle)
+          const Vtan0 = Vimpact_horizontal * Math.cos(params.planeAngleRad) - VimpactY * Math.sin(params.planeAngleRad);
+          const s_plane = Vtan0 * tRoll + 0.5 * a_plane * tRoll * tRoll;
+          // Coordenadas físicas sobre el plano:
+          const x_impact_base = params.xImpact;
+          const x_plane = x_impact_base + s_plane * Math.cos(params.planeAngleRad);
+          const y_plane = x_plane * Math.tan(params.planeAngleRad);
+          ballMesh.position.set(x_plane, y_plane + 5, 0);
+        }
+
+        renderer.render(scene, camera);
+
+        // Parar animación si pasa cierto tiempo (evitar bucle infinito)
+        if (elapsed < tRamp + tImpact + 5) {
+          animationId = requestAnimationFrame(step);
+        }
+      }
+      animationId = requestAnimationFrame(step);
+    }
+
+    // ---------------------- LLENAR TABLAS MÉTODO GRÁFICO Y ANALÍTICO ----------------------
+    function fillTables(data) {
+      // Método Gráfico
+      let htmlG = `<tr>
+        <th>P</th><th>X (cm)</th><th>Y (cm)</th><th>t (s)</th><th>Vₓ (cm/s)</th><th>Vᵧ (cm/s)</th>
+      </tr>`;
+      data.points.forEach(p => {
+        // En punto p, Vₓ = V0x, Vᵧ = -g t
+        const Vx_p = data.V0x * Math.cos(data.rampAngleRad);
+        const Vy_p = -g * p.t;
+        htmlG += `<tr>
+          <td>${p.label}</td>
+          <td>${p.x.toFixed(2)}</td>
+          <td>${p.y.toFixed(2)}</td>
+          <td>${p.t.toFixed(3)}</td>
+          <td>${Vx_p.toFixed(2)}</td>
+          <td>${Vy_p.toFixed(2)}</td>
+        </tr>`;
+      });
+      tableGrafico.innerHTML = htmlG;
+
+      // Método Analítico
+      let htmlA = `<tr>
+        <th>P</th><th>X (cm)</th><th>Y (cm)</th><th>t (s)</th>
+        <th>Vₓ (cm/s)</th><th>Vᵧ (cm/s)</th><th>Vₜ (cm/s)</th>
+        <th>θ (°)</th><th>aₙ (cm/s²)</th><th>aₜ (cm/s²)</th>
+        <th>R (cm)</th>
+      </tr>`;
+      data.points.forEach(p => {
+        const Vx_p = data.V0x * Math.cos(data.rampAngleRad);
+        const Vy_p = -g * p.t;
+        const Vt_p = Math.sqrt(Vx_p * Vx_p + Vy_p * Vy_p);
+        const theta = Math.atan2(Math.abs(Vy_p), Vx_p) * 180 / Math.PI;
+        const an = g * Math.cos(Math.atan2(Vy_p, Vx_p));
+        const at = g * Math.sin(Math.atan2(Vy_p, Vx_p));
+        const R = (an !== 0) ? (Vt_p * Vt_p / an).toFixed(2) : '∞';
+        htmlA += `<tr>
+          <td>${p.label}</td>
+          <td>${p.x.toFixed(2)}</td>
+          <td>${p.y.toFixed(2)}</td>
+          <td>${p.t.toFixed(3)}</td>
+          <td>${Vx_p.toFixed(2)}</td>
+          <td>${Vy_p.toFixed(2)}</td>
+          <td>${Vt_p.toFixed(2)}</td>
+          <td>${theta.toFixed(2)}</td>
+          <td>${an.toFixed(2)}</td>
+          <td>${at.toFixed(2)}</td>
+          <td>${R}</td>
+        </tr>`;
+      });
+      tableAnalitico.innerHTML = htmlA;
+    }
+
+    // ---------------------- ACTUALIZAR GRÁFICAS ----------------------
+    function updateCharts(data) {
+      // Datos para Y vs t
+      const tArr = data.points.map(p => p.t);
+      const yArr = data.points.map(p => p.y);
+
+      // Chart Y vs t
+      if (chartYt) chartYt.destroy();
+      chartYt = new Chart(document.getElementById('chartYt'), {
+        type: 'scatter',
+        data: {
+          datasets: [{
+            label: 'Y vs t',
+            data: tArr.map((ti, i) => ({ x: ti, y: yArr[i] })),
+            backgroundColor: '#2563eb',
+            showLine: true,
+            borderColor: '#2563eb',
+            tension: 0.3
+          }]
+        },
+        options: {
+          plugins: {
+            zoom: {
+              zoom: {
+                wheel: { enabled: true },
+                pinch: { enabled: true },
+                mode: 'xy'
+              },
+              pan: { enabled: true, mode: 'xy' }
+            }
+          },
+          scales: {
+            x: { title: { display: true, text: 't (s)' } },
+            y: { title: { display: true, text: 'Y (cm)' } }
+          }
+        }
+      });
+
+      // Datos para Vy vs t
+      const VyArr = data.points.map(p => -g * p.t);
+      if (chartVyTime) chartVyTime.destroy();
+      chartVyTime = new Chart(document.getElementById('chartVyTime'), {
+        type: 'scatter',
+        data: {
+          datasets: [{
+            label: 'Vy vs t',
+            data: tArr.map((ti, i) => ({ x: ti, y: VyArr[i] })),
+            backgroundColor: '#a21caf',
+            showLine: true,
+            borderColor: '#a21caf',
+            tension: 0.3
+          }]
+        },
+        options: {
+          plugins: {
+            zoom: {
+              zoom: {
+                wheel: { enabled: true },
+                pinch: { enabled: true },
+                mode: 'xy'
+              },
+              pan: { enabled: true, mode: 'xy' }
+            }
+          },
+          scales: {
+            x: { title: { display: true, text: 't (s)' } },
+            y: { title: { display: true, text: 'Vy (cm/s)' } }
+          }
+        }
+      });
+
+      // Datos para Y sobre el plano vs X
+      if (chartYplane) chartYplane.destroy();
+      chartYplane = new Chart(document.getElementById('chartYplane'), {
+        type: 'scatter',
+        data: {
+          datasets: [{
+            label: 'Y vs X (plano)',
+            data: data.points.map(p => ({ x: p.x, y: p.y })),
+            backgroundColor: '#059669',
+            showLine: true,
+            borderColor: '#059669',
+            tension: 0.3
+          }]
+        },
+        options: {
+          plugins: {
+            zoom: {
+              zoom: {
+                wheel: { enabled: true },
+                pinch: { enabled: true },
+                mode: 'xy'
+              },
+              pan: { enabled: true, mode: 'xy' }
+            }
+          },
+          scales: {
+            x: { title: { display: true, text: 'X (cm)' } },
+            y: { title: { display: true, text: 'Y (cm)' } }
+          }
+        }
+      });
+    }
+
+    // ---------------------- RENDER FINAL Y PRESENTAR RESULTADOS ----------------------
+    function simulate() {
+      const params = calcPhysicalParams();
+      if (!params) return;
+      simData = params;
+
+      // Mostrar velocidades e impacto
+      infoVelocity.textContent = `V₀: ${params.V0.toFixed(2)} cm/s`;
+      infoImpact.textContent = `Ímpacto en X=${params.xImpact.toFixed(2)}, Y=${params.yImpact.toFixed(2)}`;
+      infoTime.textContent = `tImpact: ${params.tImpact.toFixed(3)} s`;
+
+      // Renderizar rampas y plano
+      renderMeshes(params);
+
+      // Iniciar animación de la bola
+      if (animationId) cancelAnimationFrame(animationId);
+      animateBall(params);
+
+      // Llenar tablas y gráficas
+      fillTables(params);
+      updateCharts(params);
+    }
+
+    // ---------------------- CONTROL DE PESTAÑAS ----------------------
+    const tabs = document.querySelectorAll('.tab');
+    const tabContents = document.querySelectorAll('.tab-content');
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        tabs.forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        const target = tab.getAttribute('data-tab');
+        tabContents.forEach(tc => {
+          if (tc.id === target) tc.classList.add('active');
+          else tc.classList.remove('active');
+        });
+        // Si se activa la pestaña de gráficas, recrear los gráficos
+        if (target === 'tabGraficas' && simData) {
+          updateCharts(simData);
+        }
+        // Si se activa la pestaña de modelo gráfico o analítico, volver a llenar las tablas
+        if ((target === 'tabGrafico' || target === 'tabAnalitico') && simData) {
+          fillTables(simData);
+        }
+      });
+    });
+
+    // ---------------------- ACCORDION ----------------------
+    function toggleAccordion(id) {
+      document.getElementById(id).classList.toggle('open');
+    }
+
+    // ---------------------- INICIALIZACIÓN ----------------------
+    window.addEventListener('DOMContentLoaded', () => {
+      const container = document.getElementById('threeContainer');
+      initThree(container);
+      simulate();
+    });
+    btnSimulate.addEventListener('click', simulate);
+  </script>
+</body>
+</html>
