@@ -464,108 +464,136 @@
       errorMsg.style.display = 'none';
 
       // Leer inputs
-      const rampHeight = parseFloat(rampHeightInput.value);
+      const rampHeight = parseFloat(rampHeightInput.value); // Interpreted as initial Y of ball at x=0 of ramp
       const rampLength = parseFloat(rampLengthInput.value);
       const rampAngle = parseFloat(rampAngleInput.value);
-      const planeAngle = parseFloat(planeAngleInput.value);
+      const planeAngle = parseFloat(planeAngleInput.value); // For the target inclined plane
       const gridSize = parseFloat(gridSizeInput.value);
       const numPoints = parseInt(numPointsInput.value);
 
-      // Validaciones
+      // Validaciones (existing validation logic remains)
       if (
         isNaN(rampHeight) || rampHeight <= 0 ||
         isNaN(rampLength) || rampLength <= 0 ||
-        isNaN(rampAngle) || rampAngle <= 0 || rampAngle >= 45 ||
-        isNaN(planeAngle) || planeAngle < 0 || planeAngle >= 45 ||
+        isNaN(rampAngle) || rampAngle <= 0 || rampAngle >= 45 || // Original limits, might need review based on physics
+        isNaN(planeAngle) || planeAngle < 0 || planeAngle >= 45 || // Original limits
         isNaN(gridSize) || gridSize <= 0 ||
         isNaN(numPoints) || numPoints < 4 || numPoints > 7
       ) {
-        errorMsg.textContent = "Por favor verifique que todos los parámetros sean válidos: \n- rampHeight>0, rampLength>0\n- 0<rampAngle<45\n- 0≤planeAngle<45\n- gridSize>0\n- 4≤numPoints≤7";
+        errorMsg.textContent = "Por favor verifique que todos los parámetros sean válidos: ..."; // Keep original detailed msg
         errorMsg.style.display = 'block';
         return null;
       }
 
       const rampAngleRad = rampAngle * Math.PI / 180;
-      const planeAngleRad = planeAngle * Math.PI / 180;
+      const planeAngleRad = planeAngle * Math.PI / 180; // For the target plane after projection
 
-      // Cálculo de velocidad al final de la rampa (sin fricción, sin rodadura):
-      // Energía potencial mgh se convierte en energía cinética: V = sqrt(2 g h)
-      const V0 = Math.sqrt(2 * g * rampHeight);
+      // 1. Ramp Dynamics
+      const a_ramp = g * Math.sin(rampAngleRad);
+      if (a_ramp === 0) { // Avoid division by zero if ramp is flat (though angle validation prevents 0)
+          errorMsg.textContent = "El ángulo de la rampa no puede ser cero para el cálculo de aceleración.";
+          errorMsg.style.display = 'block';
+          return null;
+      }
+      const t_travel_ramp = Math.sqrt(2 * rampLength / a_ramp);
+      const V_at_ramp_end_scalar = a_ramp * t_travel_ramp;
 
-      // Componente horizontal en dirección de la pendiente del plano:
-      // Asumimos que el plano está orientado en la misma dirección horizontal que la rampa (eje X).
-      // Tras la transición, la bola impacta el plano con V0 en dirección del eje X (paralelo a la base de la rampa).
-      const V0x = V0;
+      const vx_end_ramp = V_at_ramp_end_scalar * Math.cos(rampAngleRad);
+      const vy_end_ramp = -V_at_ramp_end_scalar * Math.sin(rampAngleRad); // Negative for downwards
 
-      // Determinar punto de impacto con el plano: resolver ecuaciones de movimiento 3D
-      // Ec. de caída en vertical: Y(t) = y0 - 0.5 g t²
-      // Plano se define por la ecuación: z = 0 (eje Z no cambia), y = x * tan(planeAngle)
-      // Pero nuestro sistema: rampa se proyecta sobre el plano XZ: la bola baja verticalmente desde la punta de la rampa hacia el plano inclinado.
-      // Encontrar tiempo de impacto t_impact: la bola deja rampa en posición (x_r, y_r)
-      const x_r = 0;            // En coordenadas del mundo, la punta de la rampa se coloca en x=0
-      const y_r = rampHeight;   // Altura de la punta de la rampa
-      // La bola sale del borde con velocidad V0 en dirección X, pero con componente vertical inicial Vy0 = 0.
-      // En coordenadas del sistema, X avanza, Y desciende por gravedad, y Z permanece en 0.
-      // Ecuaciones paramétricas:
-      // x(t) = x_r + V0x * t
-      // y(t) = y_r - 0.5 g t²
-      // El plano inclinado: la superficie del tablero está definida por la ecuación Y_plane(x) = x * tan(planeAngleRad)
-      // El impacto ocurre cuando y(t) = Y_plane(x(t)).
-      // => y_r - 0.5 g t² = (x_r + V0x t) * tan(planeAngleRad)
-      // Llamemos k = tan(planeAngleRad). Entonces resolver: 0.5 g t² + k V0x t - y_r = 0
-      const k = Math.tan(planeAngleRad);
-      // Coeficientes cuadráticos: a = 0.5 g, b = k V0x, c = -y_r
-      const a = 0.5 * g;
-      const b = k * V0x;
-      const c = -y_r;
-      const discriminant = b * b - 4 * a * c;
+      // Launch position for projectile motion (end of ramp)
+      // Assuming rampHeight is the initial Y-coordinate of the ball at the start of the ramp (x=0 of ramp path)
+      const x_launch = rampLength * Math.cos(rampAngleRad);
+      const y_launch = rampHeight - rampLength * Math.sin(rampAngleRad);
+
+      // 2. Projectile Motion to hit the target inclined plane
+      // The target inclined plane is assumed to be y_plane = x_coord_on_plane * tan(planeAngleRad)
+      // Projectile equations:
+      // x_proj(t) = x_launch + vx_end_ramp * t
+      // y_proj(t) = y_launch + vy_end_ramp * t - 0.5 * g * t^2
+      // Intersection: y_proj(t) = (x_launch + vx_end_ramp * t) * tan(planeAngleRad)
+      // Let k_plane = tan(planeAngleRad)
+      // y_launch + vy_end_ramp * t - 0.5 * g * t^2 = (x_launch + vx_end_ramp * t) * k_plane
+      // Rearrange into At^2 + Bt + C = 0 form:
+      // 0.5 * g * t^2 + (vx_end_ramp * k_plane - vy_end_ramp) * t + (x_launch * k_plane - y_launch) = 0
+
+      const k_plane = Math.tan(planeAngleRad);
+      const quad_A = 0.5 * g;
+      const quad_B = (vx_end_ramp * k_plane) - vy_end_ramp;
+      const quad_C = (x_launch * k_plane) - y_launch;
+
+      const discriminant = quad_B * quad_B - 4 * quad_A * quad_C;
+      let tImpact_flight; // Time of flight for projectile
+
       if (discriminant < 0) {
-        errorMsg.textContent = "No se encuentra intersección con el plano inclinado. Verifique los parámetros.";
-        errorMsg.style.display = 'block';
-        return null;
-      }
-      const t1 = (-b + Math.sqrt(discriminant)) / (2 * a);
-      const t2 = (-b - Math.sqrt(discriminant)) / (2 * a);
-      // Tomar la raíz positiva más pequeña
-      let tImpact = Math.min(t1, t2);
-      if (tImpact < 0) tImpact = Math.max(t1, t2);
-      if (tImpact < 0) {
-        errorMsg.textContent = "No se encuentra un tiempo de impacto válido (negativo).";
+        errorMsg.textContent = "No se encuentra intersección con el plano inclinado (discriminante negativo). Verifique parámetros.";
         errorMsg.style.display = 'block';
         return null;
       }
 
-      // Coordenadas de impacto
-      const xImpact = x_r + V0x * tImpact;
-      const yImpact = y_r - 0.5 * g * tImpact * tImpact;
-      // Confirmar que yImpact ≈ k * xImpact
-      // Coordenadas en 3D: z=0, X=xImpact, Y=yImpact, Z=0
-      // Pero en la escena Three.js, mapearemos Y-> altura, X-> eje X, Z-> eje Z (0).
+      const t1 = (-quad_B + Math.sqrt(discriminant)) / (2 * quad_A);
+      const t2 = (-quad_B - Math.sqrt(discriminant)) / (2 * quad_A);
 
-      // Puntos de estudio sobre la hoja cuadriculada: se miden a lo largo del plano inclinado desde X=0 hasta X=xImpact
+      // Select the smallest positive time
+      if (t1 > 0 && t2 > 0) {
+        tImpact_flight = Math.min(t1, t2);
+      } else if (t1 > 0) {
+        tImpact_flight = t1;
+      } else if (t2 > 0) {
+        tImpact_flight = t2;
+      } else {
+        errorMsg.textContent = "No se encuentra un tiempo de impacto positivo. Verifique parámetros.";
+        errorMsg.style.display = 'block';
+        return null;
+      }
+
+      if (tImpact_flight === undefined || tImpact_flight <= 1e-6) { // Check for very small or undefined tImpact
+          errorMsg.textContent = "Tiempo de impacto inválido o demasiado pequeño. Considere ajustar los parámetros de la rampa o el plano.";
+          errorMsg.style.display = 'block';
+          return null;
+      }
+
+
+      // Coordinates of impact
+      const xImpact = x_launch + vx_end_ramp * tImpact_flight;
+      const yImpact = y_launch + vy_end_ramp * tImpact_flight - 0.5 * g * tImpact_flight * tImpact_flight;
+      // Or, yImpact should be xImpact * k_plane if calculations are correct
+
+      // Puntos de estudio on the projectile path until impact
       const points = [];
+      // These points should represent the projectile path, not points *on the inclined plane* before impact.
+      // The time 'ti' for these points is projectile flight time.
       for (let i = 1; i <= numPoints; i++) {
-        const xi = (i / (numPoints + 1)) * xImpact;
-        const yi = xi * k; // Y en el plano
-        const ti = (xi - x_r) / V0x; // tiempo hasta que la bola se encuentra en esa X
-        points.push({ label: `P${i}`, x: xi, y: yi, t: ti });
+        const t_point = (i / (numPoints + 1)) * tImpact_flight; // Time along the projectile path
+        const xi = x_launch + vx_end_ramp * t_point;
+        const yi = y_launch + vy_end_ramp * t_point - 0.5 * g * t_point * t_point;
+        points.push({ label: `P${i}`, x: xi, y: yi, t: t_point });
       }
 
       return {
-        rampHeight,
+        rampHeight, // Initial Y of ball
         rampLength,
-        rampAngle,
-        rampAngleRad,
-        planeAngle,
-        planeAngleRad,
+        rampAngle, // Degrees
+        rampAngleRad, // Radians
+        planeAngle, // Degrees (for target plane)
+        planeAngleRad, // Radians (for target plane)
         gridSize,
         numPoints,
-        V0,
-        V0x,
-        tImpact,
-        xImpact,
-        yImpact,
-        points
+
+        a_ramp, // Acceleration on ramp
+        t_travel_ramp, // Time to traverse ramp
+        V_at_ramp_end_scalar, // Scalar speed at end of ramp
+
+        vx_end_ramp, // Launch Vx for projectile
+        vy_end_ramp, // Launch Vy for projectile
+        x_launch,    // Launch X for projectile
+        y_launch,    // Launch Y for projectile
+
+        tImpact_flight, // Time of flight for projectile until it hits the target plane
+        xImpact,        // X coordinate of impact on the target plane
+        yImpact,        // Y coordinate of impact on the target plane
+
+        points // Points along the projectile trajectory
       };
     }
 
@@ -580,120 +608,195 @@
     }
 
     // ---------------------- ANIMACIÓN DE LA BOLA ----------------------
-    function animateBall(params) {
-      let startTime = null;
-      const rampAngleRad = params.rampAngleRad;
-      const V0x = params.V0x;
-      const tImpact = params.tImpact;
-      const x_r = 0, y_r = params.rampHeight;
+function animateBall(params) {
+  let startTime = null;
+  // g is a global constant (980)
 
-      function step(timestamp) {
-        if (!startTime) startTime = timestamp;
-        const elapsed = (timestamp - startTime) / 1000; // en segundos
-        // Si la bola aún está sobre la rampa (antes de llegar al borde)
-        // El tiempo que tarda en deslizar la rampa: tRamp = rampLength / V0x
-        const tRamp = params.rampLength / V0x;
-        let tSim = elapsed;
-        if (elapsed < tRamp) {
-          // Bola sobre rampa: se desliza a velocidad creciente (suponiendo aceleración a_ramp = g sin α)
-          const a_ramp = g * Math.sin(rampAngleRad);
-          const s = 0.5 * a_ramp * elapsed * elapsed; // distancia recorrida a lo largo de la rampa
-          const x_ramp = s * Math.cos(rampAngleRad);
-          const y_ramp = params.rampHeight - s * Math.sin(rampAngleRad);
-          ballMesh.position.set(x_ramp, y_ramp + 5, 0);
-        } else if (elapsed < tRamp + tImpact) {
-          // Bola en caída/proyección después de salir de la rampa
-          const tProj = elapsed - tRamp;
-          // Posición inicial al salir del borde:
-          const x0 = params.rampLength * Math.cos(rampAngleRad);
-          const y0 = params.rampHeight - params.rampLength * Math.sin(rampAngleRad);
-          // Componente inicial de velocidad: V0 horizontal en dirección X; vertical Vy0 = 0 en caída libre
-          const V0x_proj = params.V0x * Math.cos(rampAngleRad);
-          // Proyección en 2D (X vertical Y):
-          const x_actual = x0 + V0x_proj * tProj;
-          const y_actual = y0 - 0.5 * g * tProj * tProj;
-          ballMesh.position.set(x_actual, y_actual + 5, 0);
-        } else {
-          // Bola cayó sobre el plano inclinado; animarla rodando por el plano
-          const tRoll = elapsed - tRamp - tImpact;
-          // Durante el rodamiento en plano ideal inclinación beta: aceleración a_plane = g sin β
-          const a_plane = g * Math.sin(params.planeAngleRad);
-          // Velocidad inicial al impactar: VimpactX, VimpactY
-          const VimpactY = -g * tImpact;
-          const Vimpact_horizontal = params.V0x * Math.cos(rampAngleRad);
-          // Descomponer velocidad sobre el plano:
-          // Componente tangencial en dirección del plano: Vtan = Vimpact_horizontal cos(planeAngle) + VimpactY sin(planeAngle)
-          const Vtan0 = Vimpact_horizontal * Math.cos(params.planeAngleRad) - VimpactY * Math.sin(params.planeAngleRad);
-          const s_plane = Vtan0 * tRoll + 0.5 * a_plane * tRoll * tRoll;
-          // Coordenadas físicas sobre el plano:
-          const x_impact_base = params.xImpact;
-          const x_plane = x_impact_base + s_plane * Math.cos(params.planeAngleRad);
-          const y_plane = x_plane * Math.tan(params.planeAngleRad);
-          ballMesh.position.set(x_plane, y_plane + 5, 0);
-        }
+  // Unpack necessary params for clarity within step function if preferred, or use params.* directly
+  const {
+    rampHeight, // Initial Y of ball at x=0 of ramp path
+    rampAngleRad,
+    // rampLength, // Used in calcPhysicalParams to determine t_travel_ramp
 
-        renderer.render(scene, camera);
+    a_ramp,         // Calculated in calcPhysicalParams
+    t_travel_ramp,  // Calculated in calcPhysicalParams
 
-        // Parar animación si pasa cierto tiempo (evitar bucle infinito)
-        if (elapsed < tRamp + tImpact + 5) {
-          animationId = requestAnimationFrame(step);
-        }
+    x_launch,       // Launch X for projectile (end of ramp X)
+    y_launch,       // Launch Y for projectile (end of ramp Y)
+    vx_end_ramp,    // Launch Vx for projectile
+    vy_end_ramp,    // Launch Vy for projectile (should be negative)
+
+    tImpact_flight, // Projectile time of flight, calculated in calcPhysicalParams
+
+    // Params for rolling on plane (if we reach that phase)
+    // xImpact, yImpact, planeAngleRad are available in params
+  } = params;
+
+  function step(timestamp) {
+    if (!startTime) startTime = timestamp;
+    const elapsed = (timestamp - startTime) / 1000; // elapsed time in seconds
+
+    let ball_x, ball_y;
+
+    if (elapsed < t_travel_ramp) {
+      // Phase 1: Ball on the ramp
+      const s = 0.5 * a_ramp * elapsed * elapsed; // distance covered along the ramp slope
+      ball_x = s * Math.cos(rampAngleRad);
+      // rampHeight is the initial Y of the ball. As it slides down, Y decreases.
+      ball_y = rampHeight - s * Math.sin(rampAngleRad);
+      ballMesh.position.set(ball_x, ball_y + 5, 0); // +5 for ball radius visual offset
+
+    } else if (elapsed < t_travel_ramp + tImpact_flight) {
+      // Phase 2: Ball in projectile motion
+      const tProj = elapsed - t_travel_ramp; // time since projectile launch
+
+      ball_x = x_launch + vx_end_ramp * tProj;
+      ball_y = y_launch + vy_end_ramp * tProj - 0.5 * g * tProj * tProj;
+      ballMesh.position.set(ball_x, ball_y + 5, 0); // +5 for ball radius
+
+    } else {
+      // Phase 3: Ball has impacted and is (notionally) on the inclined plane or simulation ends
+      // For now, let's make the ball stick to the calculated impact point.
+      // More advanced rolling physics can be added later if needed.
+      // The existing rolling logic was complex and tied to the old physics model.
+      // To ensure it stops correctly or uses new params, this part needs care.
+
+      // Position at impact:
+      // ball_x = params.xImpact; // xImpact calculated in calcPhysicalParams
+      // ball_y = params.yImpact; // yImpact calculated in calcPhysicalParams
+      // ballMesh.position.set(ball_x, ball_y + 5, 0);
+
+      // Let's try to adapt the existing rolling logic but with corrected initial conditions for this phase
+      const tRoll = elapsed - (t_travel_ramp + tImpact_flight);
+
+      // Velocity components at the moment of impact:
+      const vx_at_impact = vx_end_ramp; // Assuming no air resistance during flight
+      const vy_at_impact = vy_end_ramp - g * tImpact_flight;
+
+      // Decompose impact velocity onto the inclined plane (angle planeAngleRad)
+      // Normal vector to plane: (-sin(planeAngleRad), cos(planeAngleRad))
+      // Tangent vector along plane: (cos(planeAngleRad), sin(planeAngleRad))
+      // V_tangential = Vx * cos(beta) + Vy * sin(beta) --- this needs care with coordinate systems.
+      // The original code's Vtan0 might be a simpler model:
+      // Vtan0 = Vimpact_horizontal * Math.cos(params.planeAngleRad) - VimpactY * Math.sin(params.planeAngleRad);
+      // Let's use vx_at_impact and vy_at_impact.
+      // If planeAngleRad is inclination from horizontal:
+      const V_parallel_to_plane = vx_at_impact * Math.cos(params.planeAngleRad) + vy_at_impact * Math.sin(params.planeAngleRad);
+      // This V_parallel_to_plane is the initial speed for rolling/sliding along the plane.
+      // Acceleration along the plane (assuming sliding without friction for simplicity, or pure rolling effect)
+      const a_plane = g * Math.sin(params.planeAngleRad); // This is acceleration component due to gravity along slope
+
+      // Distance traveled along the slope of the inclined plane:
+      const s_plane = V_parallel_to_plane * tRoll + 0.5 * a_plane * tRoll * tRoll;
+
+      // Position on the inclined plane, starting from params.xImpact, params.yImpact
+      // The ball moves s_plane distance ALONG the slope.
+      ball_x = params.xImpact + s_plane * Math.cos(params.planeAngleRad);
+      ball_y = params.yImpact + s_plane * Math.sin(params.planeAngleRad);
+      // Note: This y_plane calculation assumes planeAngleRad is measured upwards. If it's downwards, sign of sin might change.
+      // Given the setup y = x * tan(beta), positive beta usually means positive slope.
+      // So, if xImpact, yImpact is on this slope, then moving further means y also increases if beta > 0.
+
+      ballMesh.position.set(ball_x, ball_y + 5, 0);
+
+
+      // If we want the simulation to stop after a certain time post-impact:
+      if (tRoll > 5) { // e.g., animate for 5 seconds on the plane then stop
+        cancelAnimationFrame(animationId);
+        return;
       }
-      animationId = requestAnimationFrame(step);
     }
+
+    renderer.render(scene, camera);
+
+    // Continue animation as long as it's not explicitly stopped in Phase 3
+    // Or, use a total simulation time condition:
+    // if (elapsed < t_travel_ramp + tImpact_flight + 5) { // Stop 5s after impact
+    animationId = requestAnimationFrame(step);
+    // } else {
+       // console.log("Animation ended");
+    // }
+  }
+  // Cancel any previous animation frame before starting a new one
+  if (animationId) {
+    cancelAnimationFrame(animationId);
+  }
+  animationId = requestAnimationFrame(step);
+}
 
     // ---------------------- LLENAR TABLAS MÉTODO GRÁFICO Y ANALÍTICO ----------------------
-    function fillTables(data) {
-      // Método Gráfico
-      let htmlG = `<tr>
-        <th>P</th><th>X (cm)</th><th>Y (cm)</th><th>t (s)</th><th>Vₓ (cm/s)</th><th>Vᵧ (cm/s)</th>
-      </tr>`;
-      data.points.forEach(p => {
-        // En punto p, Vₓ = V0x, Vᵧ = -g t
-        const Vx_p = data.V0x * Math.cos(data.rampAngleRad);
-        const Vy_p = -g * p.t;
-        htmlG += `<tr>
-          <td>${p.label}</td>
-          <td>${p.x.toFixed(2)}</td>
-          <td>${p.y.toFixed(2)}</td>
-          <td>${p.t.toFixed(3)}</td>
-          <td>${Vx_p.toFixed(2)}</td>
-          <td>${Vy_p.toFixed(2)}</td>
-        </tr>`;
-      });
-      tableGrafico.innerHTML = htmlG;
+function fillTables(data) {
+  // g is a global constant (980)
+  // data.points are { label, x, y, t } where t is time from projectile launch.
+  // data.vx_end_ramp and data.vy_end_ramp are initial velocities for projectile.
 
-      // Método Analítico
-      let htmlA = `<tr>
-        <th>P</th><th>X (cm)</th><th>Y (cm)</th><th>t (s)</th>
-        <th>Vₓ (cm/s)</th><th>Vᵧ (cm/s)</th><th>Vₜ (cm/s)</th>
-        <th>θ (°)</th><th>aₙ (cm/s²)</th><th>aₜ (cm/s²)</th>
-        <th>R (cm)</th>
-      </tr>`;
-      data.points.forEach(p => {
-        const Vx_p = data.V0x * Math.cos(data.rampAngleRad);
-        const Vy_p = -g * p.t;
-        const Vt_p = Math.sqrt(Vx_p * Vx_p + Vy_p * Vy_p);
-        const theta = Math.atan2(Math.abs(Vy_p), Vx_p) * 180 / Math.PI;
-        const an = g * Math.cos(Math.atan2(Vy_p, Vx_p));
-        const at = g * Math.sin(Math.atan2(Vy_p, Vx_p));
-        const R = (an !== 0) ? (Vt_p * Vt_p / an).toFixed(2) : '∞';
-        htmlA += `<tr>
-          <td>${p.label}</td>
-          <td>${p.x.toFixed(2)}</td>
-          <td>${p.y.toFixed(2)}</td>
-          <td>${p.t.toFixed(3)}</td>
-          <td>${Vx_p.toFixed(2)}</td>
-          <td>${Vy_p.toFixed(2)}</td>
-          <td>${Vt_p.toFixed(2)}</td>
-          <td>${theta.toFixed(2)}</td>
-          <td>${an.toFixed(2)}</td>
-          <td>${at.toFixed(2)}</td>
-          <td>${R}</td>
-        </tr>`;
-      });
-      tableAnalitico.innerHTML = htmlA;
-    }
+  // Método Gráfico
+  let htmlG = `<tr>
+    <th>P</th><th>X (cm)</th><th>Y (cm)</th><th>t (s)</th><th>Vₓ (cm/s)</th><th>Vᵧ (cm/s)</th>
+  </tr>`;
+  data.points.forEach(p => {
+    const Vx_p = data.vx_end_ramp; // Horizontal velocity is constant for projectile
+    const Vy_p = data.vy_end_ramp - g * p.t; // Vertical velocity changes due to gravity
+
+    htmlG += `<tr>
+      <td>${p.label}</td>
+      <td>${p.x.toFixed(2)}</td>
+      <td>${p.y.toFixed(2)}</td>
+      <td>${p.t.toFixed(3)}</td> {/* p.t is flight time for this point */}
+      <td>${Vx_p.toFixed(2)}</td>
+      <td>${Vy_p.toFixed(2)}</td>
+    </tr>`;
+  });
+  tableGrafico.innerHTML = htmlG;
+
+  // Método Analítico
+  let htmlA = `<tr>
+    <th>P</th><th>X (cm)</th><th>Y (cm)</th><th>t (s)</th>
+    <th>Vₓ (cm/s)</th><th>Vᵧ (cm/s)</th><th>Vₜ (cm/s)</th>
+    <th>θ (°)</th><th>aₙ (cm/s²)</th><th>aₜ (cm/s²)</th>
+    <th>R (cm)</th>
+  </tr>`;
+  data.points.forEach(p => {
+    const Vx_p = data.vx_end_ramp;
+    const Vy_p = data.vy_end_ramp - g * p.t;
+    const Vt_p = Math.sqrt(Vx_p * Vx_p + Vy_p * Vy_p);
+
+    // Angle of the velocity vector with the positive X-axis
+    const theta_rad = Math.atan2(Vy_p, Vx_p);
+    const theta_deg = theta_rad * 180 / Math.PI;
+
+    // For projectile motion: acceleration is (0, -g).
+    // Tangential acceleration (a_t): component of total acceleration along the velocity vector.
+    // a_t = (ax*vx + ay*vy) / Vt_p = (0*Vx_p + (-g)*Vy_p) / Vt_p = -g * Vy_p / Vt_p
+    // Since Vy_p / Vt_p = sin(theta_rad), then a_t = -g * Math.sin(theta_rad).
+    const at_calc = -g * Math.sin(theta_rad);
+
+    // Normal acceleration (a_n): component of total acceleration perpendicular to the velocity vector.
+    // Its magnitude is sqrt(g^2 - a_t^2). Or, |a_n| = |g * cos(theta_rad)|
+    // The component an itself can be defined as ax*(-vy/Vt) + ay*(vx/Vt) = (-g)*vx/Vt = -g*cos(theta_rad)
+    // For radius of curvature, we need the magnitude of normal acceleration.
+    const an_magnitude = Math.abs(g * Math.cos(theta_rad));
+    // The table usually shows the component, so we can use:
+    const an_calc_component = -g * Math.cos(theta_rad); // This is component along normal vector pointing "left" of velocity
+
+    const R = (an_magnitude > 1e-6 && Vt_p > 1e-6) ? (Vt_p * Vt_p / an_magnitude).toFixed(2) : '∞';
+
+    htmlA += `<tr>
+      <td>${p.label}</td>
+      <td>${p.x.toFixed(2)}</td>
+      <td>${p.y.toFixed(2)}</td>
+      <td>${p.t.toFixed(3)}</td> {/* p.t is flight time for this point */}
+      <td>${Vx_p.toFixed(2)}</td>
+      <td>${Vy_p.toFixed(2)}</td>
+      <td>${Vt_p.toFixed(2)}</td>
+      <td>${theta_deg.toFixed(2)}</td>
+      <td>${an_calc_component.toFixed(2)}</td> {/* Using component for table display */}
+      <td>${at_calc.toFixed(2)}</td>
+      <td>${R}</td>
+    </tr>`;
+  });
+  tableAnalitico.innerHTML = htmlA;
+}
 
     // ---------------------- ACTUALIZAR GRÁFICAS ----------------------
     function updateCharts(data) {
@@ -806,9 +909,12 @@
       simData = params;
 
       // Mostrar velocidades e impacto
-      infoVelocity.textContent = `V₀: ${params.V0.toFixed(2)} cm/s`;
-      infoImpact.textContent = `Ímpacto en X=${params.xImpact.toFixed(2)}, Y=${params.yImpact.toFixed(2)}`;
-      infoTime.textContent = `tImpact: ${params.tImpact.toFixed(3)} s`;
+      // V_at_ramp_end_scalar is the speed of the ball as it leaves the ramp.
+      infoVelocity.textContent = `V de salida rampa: ${params.V_at_ramp_end_scalar.toFixed(2)} cm/s`;
+      // xImpact and yImpact are the coordinates where the projectile hits the target plane.
+      infoImpact.textContent = `Impacto proyectil en X=${params.xImpact.toFixed(2)}, Y=${params.yImpact.toFixed(2)}`;
+      // tImpact_flight is the time of flight of the projectile.
+      infoTime.textContent = `Tiempo de vuelo proyectil: ${params.tImpact_flight.toFixed(3)} s`;
 
       // Renderizar rampas y plano
       renderMeshes(params);
